@@ -107,19 +107,19 @@ async function loadClosedTabs() {
     return;
   }
 
-  container.innerHTML = closedTabs.map((tab, index) => {
-    const time = new Date(tab.closedAt);
-    const timeStr = time.toLocaleTimeString();
-    const title = tab.title.length > 40 ? tab.title.substring(0, 40) + '...' : tab.title;
-    const reasonLabel = { idle: 'idle', duplicate: 'dup', memory: 'mem' }[tab.reason] || tab.reason;
+  const reasonLabels = { idle: 'idle', duplicate: 'dup', memory: 'mem' };
+
+  container.innerHTML = closedTabs.map(tab => {
+    const timeStr = new Date(tab.closedAt).toLocaleTimeString();
+    const title = tab.title.length > 40 ? tab.title.slice(0, 40) + '...' : tab.title;
 
     return `
-      <div class="closed-tab" data-index="${index}">
+      <div class="closed-tab">
         <div class="closed-tab-info">
           <div class="closed-tab-title" title="${tab.title}">${title}</div>
           <div class="closed-tab-meta">
             <span class="closed-tab-time">${timeStr}</span>
-            <span class="closed-tab-reason">${reasonLabel}</span>
+            <span class="closed-tab-reason">${reasonLabels[tab.reason] || tab.reason}</span>
           </div>
         </div>
         <button class="reopen-btn" data-url="${tab.url}">Reopen</button>
@@ -143,62 +143,48 @@ async function clearClosedTabs() {
 
 async function loadDebugInfo() {
   const container = document.getElementById('debugTabs');
-  container.innerHTML = '<div class="empty-state">Loading...</div>';
 
   try {
     const tabs = await chrome.tabs.query({});
     const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
     const now = Date.now();
 
-    // Build URL counts for duplicate detection
-    const urlCounts = new Map();
-    for (const tab of tabs) {
-      if (tab.url && !tab.url.startsWith('chrome://')) {
-        urlCounts.set(tab.url, (urlCounts.get(tab.url) || 0) + 1);
-      }
-    }
-
-    // Build debug info
-    const debugInfo = tabs.map(tab => {
-      const lastActive = tabActivityData[tab.id] || now;
-      const idleMinutes = Math.round((now - lastActive) / 60000);
-      const isDupe = urlCounts.get(tab.url) > 1;
-
-      return {
-        id: tab.id,
-        title: tab.title || 'Untitled',
-        idleMinutes,
-        isDupe,
-        isPinned: tab.pinned,
-        isActive: tab.active
-      };
-    });
-
-    if (debugInfo.length === 0) {
+    if (tabs.length === 0) {
       container.innerHTML = '<div class="empty-state">No tabs found</div>';
       return;
     }
 
+    // Count URLs for duplicate detection
+    const urlCounts = new Map();
+    tabs.forEach(tab => {
+      if (tab.url && !tab.url.startsWith('chrome://')) {
+        urlCounts.set(tab.url, (urlCounts.get(tab.url) || 0) + 1);
+      }
+    });
+
     // Sort by idle time descending
-    debugInfo.sort((a, b) => b.idleMinutes - a.idleMinutes);
+    const sortedTabs = tabs
+      .map(tab => ({
+        ...tab,
+        idleMinutes: Math.round((now - (tabActivityData[tab.id] || now)) / 60000),
+        isDupe: urlCounts.get(tab.url) > 1
+      }))
+      .sort((a, b) => b.idleMinutes - a.idleMinutes);
 
-    container.innerHTML = debugInfo.map(tab => {
-      const title = tab.title.length > 30 ? tab.title.substring(0, 30) + '...' : tab.title;
-      const badges = [];
-
-      if (tab.isActive) badges.push('<span class="badge badge-active">active</span>');
-      if (tab.isPinned) badges.push('<span class="badge badge-pinned">pinned</span>');
-      if (tab.isDupe) badges.push('<span class="badge badge-dupe">dupe</span>');
-
+    container.innerHTML = sortedTabs.map(tab => {
+      const title = (tab.title || 'Untitled').slice(0, 30) + (tab.title?.length > 30 ? '...' : '');
+      const badges = [
+        tab.active && '<span class="badge badge-active">active</span>',
+        tab.pinned && '<span class="badge badge-pinned">pinned</span>',
+        tab.isDupe && '<span class="badge badge-dupe">dupe</span>'
+      ].filter(Boolean).join('');
       const idleStr = tab.idleMinutes > 0 ? `${tab.idleMinutes}m` : '<1m';
 
       return `
-        <div class="debug-tab">
-          <div class="debug-tab-title" title="${tab.title}">${title}</div>
-          <div class="debug-tab-badges">${badges.join('')}</div>
-          <div class="debug-tab-metrics">
-            <span class="metric" title="Idle time">⏱${idleStr}</span>
-          </div>
+        <div class="active-tab">
+          <span class="active-tab-title" title="${tab.title || ''}">${title}</span>
+          <span class="active-tab-badges">${badges}</span>
+          <span class="active-tab-idle">⏱${idleStr}</span>
         </div>
       `;
     }).join('');

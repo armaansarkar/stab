@@ -39,12 +39,10 @@ async function saveClosedTabs(tabs, reason) {
   const newEntries = tabs.map(tab => ({
     url: tab.url,
     title: tab.title || tab.url,
-    favIconUrl: tab.favIconUrl,
     closedAt: Date.now(),
     reason
   }));
-  const updated = [...newEntries, ...closedTabs].slice(0, 100); // Keep last 100
-  await chrome.storage.local.set({ closedTabs: updated });
+  await chrome.storage.local.set({ closedTabs: [...newEntries, ...closedTabs].slice(0, 100) });
 }
 
 // Load settings from storage
