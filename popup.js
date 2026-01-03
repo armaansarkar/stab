@@ -150,6 +150,13 @@ async function loadDebugInfo() {
     const windows = await chrome.windows.getAll({ populate: true });
     const tabs = windows.flatMap(w => w.tabs || []);
 
+    // Debug: log tabs per window
+    console.log('[TabCloser Debug] Windows:', windows.map(w => ({
+      id: w.id,
+      type: w.type,
+      tabCount: w.tabs?.length || 0
+    })));
+
     const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
     const now = Date.now();
 
@@ -179,7 +186,8 @@ async function loadDebugInfo() {
       };
     });
 
-    document.getElementById('tabCount').textContent = `${debugInfo.length} in ${windows.length} windows`;
+    const windowInfo = windows.map(w => w.tabs?.length || 0).join('+');
+    document.getElementById('tabCount').textContent = `${debugInfo.length} (${windowInfo})`;
 
     if (debugInfo.length === 0) {
       container.innerHTML = '<div class="empty-state">No tabs found</div>';
