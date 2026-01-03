@@ -126,8 +126,68 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 });
 
 // Expose runChecks globally for manual testing via DevTools console
-// Usage: Type `runChecks()` in the service worker console
 globalThis.runChecks = runChecks;
+
+// Get debug info for all tabs
+async function getDebugInfo() {
+  await loadTabActivity();
+  const tabs = await chrome.tabs.query({});
+  const now = Date.now();
+
+  // Get memory info if available
+  let processInfo = {};
+  if (chrome.processes) {
+    try {
+      processInfo = await chrome.processes.getProcessInfo([], true);
+    } catch (e) {}
+  }
+
+  // Build URL groups for duplicate detection
+  const urlCounts = new Map();
+  for (const tab of tabs) {
+    if (tab.url && !tab.url.startsWith('chrome://')) {
+      urlCounts.set(tab.url, (urlCounts.get(tab.url) || 0) + 1);
+    }
+  }
+
+  // Build debug info for each tab
+  const debugInfo = tabs.map(tab => {
+    const lastActive = tabActivity.get(tab.id) || now;
+    const idleMinutes = Math.round((now - lastActive) / 60000);
+
+    // Find memory for this tab
+    let memoryMB = null;
+    for (const [, process] of Object.entries(processInfo)) {
+      if (process.tabs && process.tabs.includes(tab.id)) {
+        memoryMB = Math.round((process.privateMemory || 0) / 1024 / 1024);
+        break;
+      }
+    }
+
+    const isDupe = urlCounts.get(tab.url) > 1;
+
+    return {
+      id: tab.id,
+      title: tab.title || 'Untitled',
+      url: tab.url,
+      idleMinutes,
+      memoryMB,
+      isDupe,
+      isPinned: tab.pinned,
+      isActive: tab.active
+    };
+  });
+
+  return debugInfo;
+}
+
+// Expose for popup
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'getDebugInfo') {
+    getDebugInfo().then(sendResponse);
+    return true; // Keep channel open for async response
+  }
+});
 
 // Main check function
 async function runChecks() {
@@ -179,6 +239,7 @@ async function checkIdleTabs() {
 async function checkMemoryTabs() {
   // Check if processes API is available
   if (!chrome.processes) {
+    await log('Memory check: API not available');
     return;
   }
 
@@ -188,14 +249,19 @@ async function checkMemoryTabs() {
     const thresholdBytes = settings.memoryThresholdMB * 1024 * 1024;
 
     const tabsToClose = [];
+    let tabsChecked = 0;
+    let maxMemory = 0;
 
     for (const tab of tabs) {
       // Skip pinned tabs and active tab
       if (tab.pinned || tab.active) continue;
 
       // Find process for this tab
-      for (const [, process] of Object.entries(processInfo)) {
+      for (const [processId, process] of Object.entries(processInfo)) {
         if (process.tabs && process.tabs.includes(tab.id)) {
+          tabsChecked++;
+          const memoryMB = Math.round((process.privateMemory || 0) / 1024 / 1024);
+          if (memoryMB > maxMemory) maxMemory = memoryMB;
           if (process.privateMemory > thresholdBytes) {
             tabsToClose.push(tab);
           }
@@ -204,13 +270,16 @@ async function checkMemoryTabs() {
       }
     }
 
+    await log(`Memory: checked ${tabsChecked} tabs, max ${maxMemory}MB (threshold: ${settings.memoryThresholdMB}MB)`);
+
     if (tabsToClose.length > 0) {
       await chrome.tabs.remove(tabsToClose.map(t => t.id));
       await saveClosedTabs(tabsToClose, 'memory');
       await log(`Closed ${tabsToClose.length} memory-heavy tab(s)`);
     }
   } catch (e) {
-    console.log('Memory check error:', e.message);
+    await log(`Memory check error: ${e.message}`);
+    console.log('Memory check error:', e);
   }
 }
 

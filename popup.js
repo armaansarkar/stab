@@ -38,6 +38,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Clear history button
   document.getElementById('clearHistory').addEventListener('click', clearClosedTabs);
 
+  // Debug refresh button
+  document.getElementById('refreshDebug').addEventListener('click', loadDebugInfo);
+  loadDebugInfo();
+
   // Add event listeners
   elements.idleEnabled.addEventListener('change', saveSettings);
   elements.idleMinutes.addEventListener('change', saveSettings);
@@ -135,4 +139,42 @@ async function loadClosedTabs() {
 async function clearClosedTabs() {
   await chrome.storage.local.set({ closedTabs: [] });
   loadClosedTabs();
+}
+
+async function loadDebugInfo() {
+  const container = document.getElementById('debugTabs');
+  container.innerHTML = '<div class="empty-state">Loading...</div>';
+
+  const debugInfo = await chrome.runtime.sendMessage({ action: 'getDebugInfo' });
+
+  if (!debugInfo || debugInfo.length === 0) {
+    container.innerHTML = '<div class="empty-state">No tabs found</div>';
+    return;
+  }
+
+  // Sort by idle time descending
+  debugInfo.sort((a, b) => b.idleMinutes - a.idleMinutes);
+
+  container.innerHTML = debugInfo.map(tab => {
+    const title = tab.title.length > 30 ? tab.title.substring(0, 30) + '...' : tab.title;
+    const badges = [];
+
+    if (tab.isActive) badges.push('<span class="badge badge-active">active</span>');
+    if (tab.isPinned) badges.push('<span class="badge badge-pinned">pinned</span>');
+    if (tab.isDupe) badges.push('<span class="badge badge-dupe">dupe</span>');
+
+    const memoryStr = tab.memoryMB !== null ? `${tab.memoryMB}MB` : '-';
+    const idleStr = tab.idleMinutes > 0 ? `${tab.idleMinutes}m` : '<1m';
+
+    return `
+      <div class="debug-tab">
+        <div class="debug-tab-title" title="${tab.title}">${title}</div>
+        <div class="debug-tab-badges">${badges.join('')}</div>
+        <div class="debug-tab-metrics">
+          <span class="metric" title="Idle time">⏱${idleStr}</span>
+          <span class="metric" title="Memory">💾${memoryStr}</span>
+        </div>
+      </div>
+    `;
+  }).join('');
 }
