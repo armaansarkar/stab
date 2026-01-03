@@ -137,9 +137,6 @@ input:checked + .slider:before {
 }
 
 .collapsible-section summary {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
   font-size: 12px;
   font-weight: 500;
   color: #666;
@@ -164,6 +161,11 @@ input:checked + .slider:before {
 
 .collapsible-section[open] > div {
   margin-top: 8px;
+}
+
+.section-actions {
+  margin-top: 8px;
+  margin-bottom: 4px;
 }
 
 #logs {
