@@ -53,26 +53,26 @@
       <span class="note">Pinned and active tabs are always protected</span>
     </div>
 
-    <div class="logs-section">
-      <div class="logs-header">Activity Log</div>
+    <details class="collapsible-section">
+      <summary>Activity Log</summary>
       <div id="logs"></div>
-    </div>
+    </details>
 
-    <div class="closed-tabs-section">
-      <div class="section-header">
+    <details class="collapsible-section">
+      <summary>
         <span>Closed Tabs</span>
         <button id="clearHistory" class="clear-btn">Clear</button>
-      </div>
+      </summary>
       <div id="closedTabs"></div>
-    </div>
+    </details>
 
-    <div class="debug-section">
-      <div class="section-header">
+    <details class="collapsible-section">
+      <summary>
         <span>Debug: All Tabs</span>
         <button id="refreshDebug" class="clear-btn">Refresh</button>
-      </div>
+      </summary>
       <div id="debugTabs"></div>
-    </div>
+    </details>
   </div>
   <script src="popup.js"></script>
 </body>

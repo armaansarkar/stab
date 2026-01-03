@@ -130,17 +130,40 @@ input:checked + .slider:before {
   color: #999;
 }
 
-.logs-section {
+.collapsible-section {
   margin-top: 12px;
   padding-top: 12px;
   border-top: 1px solid #eee;
 }
 
-.logs-header {
+.collapsible-section summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
   font-size: 12px;
   font-weight: 500;
   color: #666;
-  margin-bottom: 8px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible-section summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-section summary::before {
+  content: '▶';
+  font-size: 10px;
+  margin-right: 6px;
+  transition: transform 0.2s;
+}
+
+.collapsible-section[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.collapsible-section[open] > div {
+  margin-top: 8px;
 }
 
 #logs {
@@ -158,22 +181,6 @@ input:checked + .slider:before {
 .log-time {
   color: #999;
   margin-right: 6px;
-}
-
-.closed-tabs-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: #666;
 }
 
 .clear-btn {
@@ -252,12 +259,6 @@ input:checked + .slider:before {
   color: #999;
   text-align: center;
   padding: 12px 0;
-}
-
-.debug-section {
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #eee;
 }
 
 #debugTabs {
