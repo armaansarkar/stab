@@ -310,6 +310,11 @@ input:checked + .slider:before {
   color: #856404;
 }
 
+.badge-suspended {
+  background: #e2e3e5;
+  color: #6c757d;
+}
+
 .debug-tab-metrics {
   display: flex;
   gap: 8px;
