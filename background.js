@@ -1,5 +1,17 @@
-// Tab activity tracking
-const tabActivity = new Map();
+// Tab activity tracking (persisted to survive service worker restarts)
+let tabActivity = new Map();
+
+// Load tab activity from storage
+async function loadTabActivity() {
+  const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
+  tabActivity = new Map(Object.entries(tabActivityData).map(([k, v]) => [parseInt(k), v]));
+}
+
+// Save tab activity to storage
+async function saveTabActivity() {
+  const data = Object.fromEntries(tabActivity);
+  await chrome.storage.local.set({ tabActivityData: data });
+}
 
 // Default settings
 const DEFAULT_SETTINGS = {
@@ -45,14 +57,16 @@ async function loadSettings() {
 // Initialize on install/startup
 chrome.runtime.onInstalled.addListener(async () => {
   await loadSettings();
-  initializeTabActivity();
+  await loadTabActivity();
+  await initializeTabActivity();
   setupAlarm();
   await log('Extension installed');
 });
 
 chrome.runtime.onStartup.addListener(async () => {
   await loadSettings();
-  initializeTabActivity();
+  await loadTabActivity();
+  await initializeTabActivity();
   setupAlarm();
 });
 
@@ -60,11 +74,14 @@ chrome.runtime.onStartup.addListener(async () => {
 async function initializeTabActivity() {
   const tabs = await chrome.tabs.query({});
   const now = Date.now();
+  let changed = false;
   tabs.forEach(tab => {
     if (!tabActivity.has(tab.id)) {
       tabActivity.set(tab.id, now);
+      changed = true;
     }
   });
+  if (changed) await saveTabActivity();
 }
 
 // Set up periodic check alarm (every 1 minute)
@@ -73,18 +90,21 @@ function setupAlarm() {
 }
 
 // Track tab activation
-chrome.tabs.onActivated.addListener(({ tabId }) => {
+chrome.tabs.onActivated.addListener(async ({ tabId }) => {
   tabActivity.set(tabId, Date.now());
+  await saveTabActivity();
 });
 
 // Track tab updates (for new tabs)
-chrome.tabs.onCreated.addListener((tab) => {
+chrome.tabs.onCreated.addListener(async (tab) => {
   tabActivity.set(tab.id, Date.now());
+  await saveTabActivity();
 });
 
 // Clean up when tabs close
-chrome.tabs.onRemoved.addListener((tabId) => {
+chrome.tabs.onRemoved.addListener(async (tabId) => {
   tabActivity.delete(tabId);
+  await saveTabActivity();
 });
 
 // Listen for settings changes
@@ -99,6 +119,7 @@ chrome.storage.onChanged.addListener((changes, namespace) => {
 // Alarm handler - run checks
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'checkTabs') {
+    await loadTabActivity(); // Reload in case service worker restarted
     await log('Running check...');
     await runChecks();
   }
@@ -144,9 +165,13 @@ async function checkIdleTabs() {
   }
 
   if (tabsToClose.length > 0) {
-    await saveClosedTabs(tabsToClose, 'idle');
-    await log(`Closed ${tabsToClose.length} idle tab(s)`);
-    await chrome.tabs.remove(tabsToClose.map(t => t.id));
+    try {
+      await chrome.tabs.remove(tabsToClose.map(t => t.id));
+      await saveClosedTabs(tabsToClose, 'idle');
+      await log(`Closed ${tabsToClose.length} idle tab(s)`);
+    } catch (e) {
+      console.log('Failed to close idle tabs:', e.message);
+    }
   }
 }
 
@@ -180,13 +205,12 @@ async function checkMemoryTabs() {
     }
 
     if (tabsToClose.length > 0) {
+      await chrome.tabs.remove(tabsToClose.map(t => t.id));
       await saveClosedTabs(tabsToClose, 'memory');
       await log(`Closed ${tabsToClose.length} memory-heavy tab(s)`);
-      await chrome.tabs.remove(tabsToClose.map(t => t.id));
     }
   } catch (e) {
-    // Processes API not available or error
-    console.log('Memory check unavailable:', e.message);
+    console.log('Memory check error:', e.message);
   }
 }
 
@@ -229,8 +253,12 @@ async function checkDuplicateTabs() {
   }
 
   if (tabsToClose.length > 0) {
-    await saveClosedTabs(tabsToClose, 'duplicate');
-    await log(`Closed ${tabsToClose.length} duplicate tab(s)`);
-    await chrome.tabs.remove(tabsToClose.map(t => t.id));
+    try {
+      await chrome.tabs.remove(tabsToClose.map(t => t.id));
+      await saveClosedTabs(tabsToClose, 'duplicate');
+      await log(`Closed ${tabsToClose.length} duplicate tab(s)`);
+    } catch (e) {
+      console.log('Failed to close duplicate tabs:', e.message);
+    }
   }
 }
