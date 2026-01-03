@@ -146,8 +146,8 @@ async function loadDebugInfo() {
   container.innerHTML = '<div class="empty-state">Loading...</div>';
 
   try {
-    // Get data directly instead of messaging service worker
-    const tabs = await chrome.tabs.query({});
+    // Get all tabs across all windows
+    const tabs = await chrome.tabs.query({ windowType: 'normal' });
     const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
     const now = Date.now();
 
@@ -176,6 +176,8 @@ async function loadDebugInfo() {
         isActive: tab.active
       };
     });
+
+    document.getElementById('tabCount').textContent = debugInfo.length;
 
     if (debugInfo.length === 0) {
       container.innerHTML = '<div class="empty-state">No tabs found</div>';
