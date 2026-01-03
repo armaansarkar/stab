@@ -166,6 +166,7 @@ input:checked + .slider:before {
 .section-actions {
   margin-top: 8px;
   margin-bottom: 4px;
+  text-align: right;
 }
 
 #logs {
