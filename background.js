@@ -184,7 +184,12 @@ async function getDebugInfo() {
 // Expose for popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'getDebugInfo') {
-    getDebugInfo().then(sendResponse);
+    getDebugInfo()
+      .then(sendResponse)
+      .catch(e => {
+        console.log('getDebugInfo error:', e);
+        sendResponse([]);
+      });
     return true; // Keep channel open for async response
   }
 });

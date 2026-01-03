@@ -145,7 +145,16 @@ async function loadDebugInfo() {
   const container = document.getElementById('debugTabs');
   container.innerHTML = '<div class="empty-state">Loading...</div>';
 
-  const debugInfo = await chrome.runtime.sendMessage({ action: 'getDebugInfo' });
+  let debugInfo;
+  try {
+    debugInfo = await Promise.race([
+      chrome.runtime.sendMessage({ action: 'getDebugInfo' }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
+    ]);
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state">Failed to load (service worker may need restart)</div>';
+    return;
+  }
 
   if (!debugInfo || debugInfo.length === 0) {
     container.innerHTML = '<div class="empty-state">No tabs found</div>';
