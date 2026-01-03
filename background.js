@@ -21,6 +21,20 @@ async function log(message) {
   await chrome.storage.local.set({ logs: logs.slice(0, 20) });
 }
 
+// Save closed tabs to history
+async function saveClosedTabs(tabs, reason) {
+  const { closedTabs = [] } = await chrome.storage.local.get('closedTabs');
+  const newEntries = tabs.map(tab => ({
+    url: tab.url,
+    title: tab.title || tab.url,
+    favIconUrl: tab.favIconUrl,
+    closedAt: Date.now(),
+    reason
+  }));
+  const updated = [...newEntries, ...closedTabs].slice(0, 100); // Keep last 100
+  await chrome.storage.local.set({ closedTabs: updated });
+}
+
 // Load settings from storage
 async function loadSettings() {
   const stored = await chrome.storage.sync.get(DEFAULT_SETTINGS);
@@ -125,13 +139,14 @@ async function checkIdleTabs() {
 
     const lastActive = tabActivity.get(tab.id) || now;
     if (now - lastActive > idleThreshold) {
-      tabsToClose.push(tab.id);
+      tabsToClose.push(tab);
     }
   }
 
   if (tabsToClose.length > 0) {
+    await saveClosedTabs(tabsToClose, 'idle');
     await log(`Closed ${tabsToClose.length} idle tab(s)`);
-    await chrome.tabs.remove(tabsToClose);
+    await chrome.tabs.remove(tabsToClose.map(t => t.id));
   }
 }
 
@@ -157,7 +172,7 @@ async function checkMemoryTabs() {
       for (const [, process] of Object.entries(processInfo)) {
         if (process.tabs && process.tabs.includes(tab.id)) {
           if (process.privateMemory > thresholdBytes) {
-            tabsToClose.push(tab.id);
+            tabsToClose.push(tab);
           }
           break;
         }
@@ -165,7 +180,9 @@ async function checkMemoryTabs() {
     }
 
     if (tabsToClose.length > 0) {
-      await chrome.tabs.remove(tabsToClose);
+      await saveClosedTabs(tabsToClose, 'memory');
+      await log(`Closed ${tabsToClose.length} memory-heavy tab(s)`);
+      await chrome.tabs.remove(tabsToClose.map(t => t.id));
     }
   } catch (e) {
     // Processes API not available or error
@@ -206,13 +223,14 @@ async function checkDuplicateTabs() {
     // Keep the first (most recent), close the rest (unless active)
     for (let i = 1; i < tabGroup.length; i++) {
       if (!tabGroup[i].active) {
-        tabsToClose.push(tabGroup[i].id);
+        tabsToClose.push(tabGroup[i]);
       }
     }
   }
 
   if (tabsToClose.length > 0) {
+    await saveClosedTabs(tabsToClose, 'duplicate');
     await log(`Closed ${tabsToClose.length} duplicate tab(s)`);
-    await chrome.tabs.remove(tabsToClose);
+    await chrome.tabs.remove(tabsToClose.map(t => t.id));
   }
 }

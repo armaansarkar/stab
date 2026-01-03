@@ -32,6 +32,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load and display logs
   loadLogs();
 
+  // Load and display closed tabs
+  loadClosedTabs();
+
+  // Clear history button
+  document.getElementById('clearHistory').addEventListener('click', clearClosedTabs);
+
   // Add event listeners
   elements.idleEnabled.addEventListener('change', saveSettings);
   elements.idleMinutes.addEventListener('change', saveSettings);
@@ -86,4 +92,47 @@ async function loadLogs() {
     const timeStr = time.toLocaleTimeString();
     return `<div class="log-entry"><span class="log-time">${timeStr}</span> ${entry.message}</div>`;
   }).join('');
+}
+
+async function loadClosedTabs() {
+  const { closedTabs = [] } = await chrome.storage.local.get('closedTabs');
+  const container = document.getElementById('closedTabs');
+
+  if (closedTabs.length === 0) {
+    container.innerHTML = '<div class="empty-state">No closed tabs yet</div>';
+    return;
+  }
+
+  container.innerHTML = closedTabs.map((tab, index) => {
+    const time = new Date(tab.closedAt);
+    const timeStr = time.toLocaleTimeString();
+    const title = tab.title.length > 40 ? tab.title.substring(0, 40) + '...' : tab.title;
+    const reasonLabel = { idle: 'idle', duplicate: 'dup', memory: 'mem' }[tab.reason] || tab.reason;
+
+    return `
+      <div class="closed-tab" data-index="${index}">
+        <div class="closed-tab-info">
+          <div class="closed-tab-title" title="${tab.title}">${title}</div>
+          <div class="closed-tab-meta">
+            <span class="closed-tab-time">${timeStr}</span>
+            <span class="closed-tab-reason">${reasonLabel}</span>
+          </div>
+        </div>
+        <button class="reopen-btn" data-url="${tab.url}">Reopen</button>
+      </div>
+    `;
+  }).join('');
+
+  // Add click handlers for reopen buttons
+  container.querySelectorAll('.reopen-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const url = e.target.dataset.url;
+      chrome.tabs.create({ url });
+    });
+  });
+}
+
+async function clearClosedTabs() {
+  await chrome.storage.local.set({ closedTabs: [] });
+  loadClosedTabs();
 }
