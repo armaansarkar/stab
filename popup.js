@@ -146,8 +146,10 @@ async function loadDebugInfo() {
   container.innerHTML = '<div class="empty-state">Loading...</div>';
 
   try {
-    // Get all tabs across all windows
-    const tabs = await chrome.tabs.query({ windowType: 'normal' });
+    // Get all windows first, then all tabs
+    const windows = await chrome.windows.getAll({ populate: true });
+    const tabs = windows.flatMap(w => w.tabs || []);
+
     const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
     const now = Date.now();
 
@@ -177,7 +179,7 @@ async function loadDebugInfo() {
       };
     });
 
-    document.getElementById('tabCount').textContent = debugInfo.length;
+    document.getElementById('tabCount').textContent = `${debugInfo.length} in ${windows.length} windows`;
 
     if (debugInfo.length === 0) {
       container.innerHTML = '<div class="empty-state">No tabs found</div>';
