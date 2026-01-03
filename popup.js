@@ -146,16 +146,7 @@ async function loadDebugInfo() {
   container.innerHTML = '<div class="empty-state">Loading...</div>';
 
   try {
-    // Get all tabs including discarded/suspended ones
     const tabs = await chrome.tabs.query({});
-    const discardedTabs = await chrome.tabs.query({ discarded: true });
-
-    // Merge and dedupe
-    const allTabIds = new Set(tabs.map(t => t.id));
-    for (const t of discardedTabs) {
-      if (!allTabIds.has(t.id)) tabs.push(t);
-    }
-
     const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
     const now = Date.now();
 
@@ -176,17 +167,12 @@ async function loadDebugInfo() {
       return {
         id: tab.id,
         title: tab.title || 'Untitled',
-        url: tab.url,
         idleMinutes,
         isDupe,
         isPinned: tab.pinned,
-        isActive: tab.active,
-        isDiscarded: tab.discarded
+        isActive: tab.active
       };
     });
-
-    const discardedCount = tabs.filter(t => t.discarded).length;
-    document.getElementById('tabCount').textContent = `${debugInfo.length} (${discardedCount} suspended)`;
 
     if (debugInfo.length === 0) {
       container.innerHTML = '<div class="empty-state">No tabs found</div>';
@@ -203,7 +189,6 @@ async function loadDebugInfo() {
       if (tab.isActive) badges.push('<span class="badge badge-active">active</span>');
       if (tab.isPinned) badges.push('<span class="badge badge-pinned">pinned</span>');
       if (tab.isDupe) badges.push('<span class="badge badge-dupe">dupe</span>');
-      if (tab.isDiscarded) badges.push('<span class="badge badge-suspended">susp</span>');
 
       const idleStr = tab.idleMinutes > 0 ? `${tab.idleMinutes}m` : '<1m';
 
