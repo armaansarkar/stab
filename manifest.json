@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "TabCloser",
+  "name": "Stab",
   "version": "1.0.0",
   "description": "Auto-close tabs based on idle time, memory usage, and duplicates",
   "permissions": [

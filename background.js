@@ -26,7 +26,7 @@ let settings = { ...DEFAULT_SETTINGS };
 
 // Activity log (stored for popup display)
 async function log(message) {
-  console.log(`[TabCloser] ${message}`);
+  console.log(`[Stab] ${message}`);
   const { logs = [] } = await chrome.storage.local.get('logs');
   logs.unshift({ time: Date.now(), message });
   // Keep only last 20 entries
