@@ -145,45 +145,67 @@ async function loadDebugInfo() {
   const container = document.getElementById('debugTabs');
   container.innerHTML = '<div class="empty-state">Loading...</div>';
 
-  let debugInfo;
   try {
-    debugInfo = await Promise.race([
-      chrome.runtime.sendMessage({ action: 'getDebugInfo' }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 3000))
-    ]);
-  } catch (e) {
-    container.innerHTML = '<div class="empty-state">Failed to load (service worker may need restart)</div>';
-    return;
-  }
+    // Get data directly instead of messaging service worker
+    const tabs = await chrome.tabs.query({});
+    const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
+    const now = Date.now();
 
-  if (!debugInfo || debugInfo.length === 0) {
-    container.innerHTML = '<div class="empty-state">No tabs found</div>';
-    return;
-  }
+    // Build URL counts for duplicate detection
+    const urlCounts = new Map();
+    for (const tab of tabs) {
+      if (tab.url && !tab.url.startsWith('chrome://')) {
+        urlCounts.set(tab.url, (urlCounts.get(tab.url) || 0) + 1);
+      }
+    }
 
-  // Sort by idle time descending
-  debugInfo.sort((a, b) => b.idleMinutes - a.idleMinutes);
+    // Build debug info
+    const debugInfo = tabs.map(tab => {
+      const lastActive = tabActivityData[tab.id] || now;
+      const idleMinutes = Math.round((now - lastActive) / 60000);
+      const isDupe = urlCounts.get(tab.url) > 1;
 
-  container.innerHTML = debugInfo.map(tab => {
-    const title = tab.title.length > 30 ? tab.title.substring(0, 30) + '...' : tab.title;
-    const badges = [];
+      return {
+        id: tab.id,
+        title: tab.title || 'Untitled',
+        url: tab.url,
+        idleMinutes,
+        memoryMB: null, // Can't get memory from popup
+        isDupe,
+        isPinned: tab.pinned,
+        isActive: tab.active
+      };
+    });
 
-    if (tab.isActive) badges.push('<span class="badge badge-active">active</span>');
-    if (tab.isPinned) badges.push('<span class="badge badge-pinned">pinned</span>');
-    if (tab.isDupe) badges.push('<span class="badge badge-dupe">dupe</span>');
+    if (debugInfo.length === 0) {
+      container.innerHTML = '<div class="empty-state">No tabs found</div>';
+      return;
+    }
 
-    const memoryStr = tab.memoryMB !== null ? `${tab.memoryMB}MB` : '-';
-    const idleStr = tab.idleMinutes > 0 ? `${tab.idleMinutes}m` : '<1m';
+    // Sort by idle time descending
+    debugInfo.sort((a, b) => b.idleMinutes - a.idleMinutes);
 
-    return `
-      <div class="debug-tab">
-        <div class="debug-tab-title" title="${tab.title}">${title}</div>
-        <div class="debug-tab-badges">${badges.join('')}</div>
-        <div class="debug-tab-metrics">
-          <span class="metric" title="Idle time">⏱${idleStr}</span>
-          <span class="metric" title="Memory">💾${memoryStr}</span>
+    container.innerHTML = debugInfo.map(tab => {
+      const title = tab.title.length > 30 ? tab.title.substring(0, 30) + '...' : tab.title;
+      const badges = [];
+
+      if (tab.isActive) badges.push('<span class="badge badge-active">active</span>');
+      if (tab.isPinned) badges.push('<span class="badge badge-pinned">pinned</span>');
+      if (tab.isDupe) badges.push('<span class="badge badge-dupe">dupe</span>');
+
+      const idleStr = tab.idleMinutes > 0 ? `${tab.idleMinutes}m` : '<1m';
+
+      return `
+        <div class="debug-tab">
+          <div class="debug-tab-title" title="${tab.title}">${title}</div>
+          <div class="debug-tab-badges">${badges.join('')}</div>
+          <div class="debug-tab-metrics">
+            <span class="metric" title="Idle time">⏱${idleStr}</span>
+          </div>
         </div>
-      </div>
-    `;
-  }).join('');
+      `;
+    }).join('');
+  } catch (e) {
+    container.innerHTML = `<div class="empty-state">Error: ${e.message}</div>`;
+  }
 }
