@@ -458,17 +458,18 @@ async function applyWorkspaces(workspaces, mode) {
     try {
       if (mode === 'windows') {
         // Move to new window
-        console.log(`Creating window for "${ws.name}" with tabs:`, validIds);
+        await log(`Moving tab ${validIds[0]} to new window...`);
         const newWindow = await chrome.windows.create({ tabId: validIds[0] });
-        console.log(`Window created:`, newWindow);
+        await log(`Window ${newWindow?.id} created, focused: ${newWindow?.focused}`);
         if (validIds.length > 1) {
+          await log(`Moving tabs ${validIds.slice(1).join(', ')} to window ${newWindow.id}...`);
           const moved = await chrome.tabs.move(validIds.slice(1), {
             windowId: newWindow.id,
             index: -1
           });
-          console.log(`Moved tabs:`, moved);
+          await log(`Moved ${Array.isArray(moved) ? moved.length : 1} tab(s)`);
         }
-        await log(`Created window: ${ws.name}`);
+        await log(`Done: ${ws.name}`);
       } else {
         // Create tab group (default)
         console.log(`Creating group with tabs:`, validIds);
