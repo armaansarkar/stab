@@ -404,7 +404,9 @@ Rules:
     });
 
     if (!response.ok) {
-      throw new Error(`API error: ${response.status}`);
+      const errorBody = await response.text();
+      console.error('API error:', response.status, errorBody);
+      throw new Error(`API error: ${response.status} - ${errorBody.slice(0, 100)}`);
     }
 
     const result = await response.json();
@@ -468,6 +470,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
 
         await log('Detecting workspaces...');
+        console.log('Using API key:', apiKey ? `${apiKey.slice(0, 10)}...` : 'none');
         const result = await detectWorkspaces(apiKey);
 
         if (result.workspaces && result.workspaces.length > 0) {

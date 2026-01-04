@@ -103,12 +103,15 @@ async function saveSettings() {
 }
 
 async function organizeWorkspaces() {
-  const apiKey = elements.apiKey.value;
+  const apiKey = elements.apiKey.value.trim();
   if (!apiKey) {
     elements.organizeStatus.textContent = 'Enter API key first';
     elements.organizeStatus.className = 'organize-status error';
     return;
   }
+
+  // Save API key before organizing (in case it wasn't saved yet)
+  await chrome.storage.sync.set({ apiKey });
 
   elements.organizeBtn.disabled = true;
   elements.organizeStatus.textContent = 'Organizing...';
