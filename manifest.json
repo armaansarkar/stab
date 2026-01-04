@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Stab",
   "version": "1.0.0",
-  "description": "Auto-close tabs based on idle time, memory usage, and duplicates",
+  "description": "Automatically close idle, duplicate, and memory-heavy tabs to keep your browser clean and fast.",
   "permissions": [
     "tabs",
     "storage",
