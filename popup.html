@@ -16,8 +16,12 @@
       </div>
       <div class="setting-detail">
         <span>After</span>
-        <input type="number" id="idleMinutes" min="1" max="1440">
-        <span>minutes</span>
+        <input type="number" id="idleTime" min="1" max="999">
+        <select id="idleUnit">
+          <option value="minutes">minutes</option>
+          <option value="hours">hours</option>
+          <option value="days">days</option>
+        </select>
       </div>
     </div>
 

@@ -61,6 +61,21 @@ body {
   border-color: #4a90d9;
 }
 
+.setting-detail select {
+  padding: 4px 6px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+}
+
+.setting-detail select:focus {
+  outline: none;
+  border-color: #4a90d9;
+}
+
 .setting-note {
   margin-top: 6px;
   margin-left: 50px;

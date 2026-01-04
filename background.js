@@ -16,7 +16,8 @@ async function saveTabActivity() {
 // Default settings
 const DEFAULT_SETTINGS = {
   idleEnabled: true,
-  idleMinutes: 30,
+  idleTime: 30,
+  idleUnit: 'minutes',
   memoryEnabled: false,
   memoryThresholdMB: 500,
   duplicatesEnabled: true
@@ -140,11 +141,17 @@ async function runChecks() {
   }
 }
 
+// Convert idle time to milliseconds based on unit
+function getIdleThresholdMs() {
+  const multipliers = { minutes: 60 * 1000, hours: 60 * 60 * 1000, days: 24 * 60 * 60 * 1000 };
+  return settings.idleTime * (multipliers[settings.idleUnit] || multipliers.minutes);
+}
+
 // Check and close idle tabs
 async function checkIdleTabs() {
   const tabs = await chrome.tabs.query({});
   const now = Date.now();
-  const idleThreshold = settings.idleMinutes * 60 * 1000;
+  const idleThreshold = getIdleThresholdMs();
 
   const tabsToClose = [];
 

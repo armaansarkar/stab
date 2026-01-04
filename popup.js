@@ -1,6 +1,7 @@
 const DEFAULT_SETTINGS = {
   idleEnabled: true,
-  idleMinutes: 30,
+  idleTime: 30,
+  idleUnit: 'minutes',
   memoryEnabled: false,
   memoryThresholdMB: 500,
   duplicatesEnabled: true
@@ -11,7 +12,8 @@ const elements = {};
 document.addEventListener('DOMContentLoaded', async () => {
   // Cache DOM elements
   elements.idleEnabled = document.getElementById('idleEnabled');
-  elements.idleMinutes = document.getElementById('idleMinutes');
+  elements.idleTime = document.getElementById('idleTime');
+  elements.idleUnit = document.getElementById('idleUnit');
   elements.memoryEnabled = document.getElementById('memoryEnabled');
   elements.memoryThresholdMB = document.getElementById('memoryThresholdMB');
   elements.duplicatesEnabled = document.getElementById('duplicatesEnabled');
@@ -21,7 +23,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
 
   elements.idleEnabled.checked = settings.idleEnabled;
-  elements.idleMinutes.value = settings.idleMinutes;
+  elements.idleTime.value = settings.idleTime;
+  elements.idleUnit.value = settings.idleUnit;
   elements.memoryEnabled.checked = settings.memoryEnabled;
   elements.memoryThresholdMB.value = settings.memoryThresholdMB;
   elements.duplicatesEnabled.checked = settings.duplicatesEnabled;
@@ -44,7 +47,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Add event listeners
   elements.idleEnabled.addEventListener('change', saveSettings);
-  elements.idleMinutes.addEventListener('change', saveSettings);
+  elements.idleTime.addEventListener('change', saveSettings);
+  elements.idleUnit.addEventListener('change', saveSettings);
   elements.memoryEnabled.addEventListener('change', saveSettings);
   elements.memoryThresholdMB.addEventListener('change', saveSettings);
   elements.duplicatesEnabled.addEventListener('change', saveSettings);
@@ -73,7 +77,8 @@ async function checkMemoryApiAvailable() {
 async function saveSettings() {
   const settings = {
     idleEnabled: elements.idleEnabled.checked,
-    idleMinutes: parseInt(elements.idleMinutes.value, 10) || 30,
+    idleTime: parseInt(elements.idleTime.value, 10) || 30,
+    idleUnit: elements.idleUnit.value,
     memoryEnabled: elements.memoryEnabled.checked,
     memoryThresholdMB: parseInt(elements.memoryThresholdMB.value, 10) || 500,
     duplicatesEnabled: elements.duplicatesEnabled.checked
