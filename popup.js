@@ -53,6 +53,9 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('refreshDebug').addEventListener('click', loadDebugInfo);
   loadDebugInfo();
 
+  // Copy logs button
+  document.getElementById('copyLogs').addEventListener('click', copyLogs);
+
   // Add event listeners
   elements.idleEnabled.addEventListener('change', saveSettings);
   elements.idleTime.addEventListener('change', saveSettings);
@@ -153,6 +156,19 @@ async function loadLogs() {
     const timeStr = time.toLocaleTimeString();
     return `<div class="log-entry"><span class="log-time">${timeStr}</span> ${entry.message}</div>`;
   }).join('');
+}
+
+async function copyLogs() {
+  const { logs = [] } = await chrome.storage.local.get('logs');
+  const text = logs.map(entry => {
+    const time = new Date(entry.time).toLocaleTimeString();
+    return `${time} ${entry.message}`;
+  }).join('\n');
+  await navigator.clipboard.writeText(text);
+  document.getElementById('copyLogs').textContent = 'Copied!';
+  setTimeout(() => {
+    document.getElementById('copyLogs').textContent = 'Copy';
+  }, 1500);
 }
 
 async function loadClosedTabs() {
