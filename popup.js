@@ -4,7 +4,9 @@ const DEFAULT_SETTINGS = {
   idleUnit: 'minutes',
   memoryEnabled: false,
   memoryThresholdMB: 500,
-  duplicatesEnabled: true
+  duplicatesEnabled: true,
+  apiKey: '',
+  organizationMode: 'groups'
 };
 
 const elements = {};
@@ -18,6 +20,10 @@ document.addEventListener('DOMContentLoaded', async () => {
   elements.memoryThresholdMB = document.getElementById('memoryThresholdMB');
   elements.duplicatesEnabled = document.getElementById('duplicatesEnabled');
   elements.memoryNote = document.getElementById('memoryNote');
+  elements.apiKey = document.getElementById('apiKey');
+  elements.organizationMode = document.getElementById('organizationMode');
+  elements.organizeBtn = document.getElementById('organizeBtn');
+  elements.organizeStatus = document.getElementById('organizeStatus');
 
   // Load and display settings
   const settings = await chrome.storage.sync.get(DEFAULT_SETTINGS);
@@ -28,6 +34,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   elements.memoryEnabled.checked = settings.memoryEnabled;
   elements.memoryThresholdMB.value = settings.memoryThresholdMB;
   elements.duplicatesEnabled.checked = settings.duplicatesEnabled;
+  elements.apiKey.value = settings.apiKey;
+  elements.organizationMode.value = settings.organizationMode;
 
   // Check if processes API is available
   checkMemoryApiAvailable();
@@ -52,6 +60,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   elements.memoryEnabled.addEventListener('change', saveSettings);
   elements.memoryThresholdMB.addEventListener('change', saveSettings);
   elements.duplicatesEnabled.addEventListener('change', saveSettings);
+  elements.apiKey.addEventListener('change', saveSettings);
+  elements.organizationMode.addEventListener('change', saveSettings);
+
+  // Organize button
+  elements.organizeBtn.addEventListener('click', organizeWorkspaces);
 });
 
 async function checkMemoryApiAvailable() {
@@ -81,10 +94,46 @@ async function saveSettings() {
     idleUnit: elements.idleUnit.value,
     memoryEnabled: elements.memoryEnabled.checked,
     memoryThresholdMB: parseInt(elements.memoryThresholdMB.value, 10) || 500,
-    duplicatesEnabled: elements.duplicatesEnabled.checked
+    duplicatesEnabled: elements.duplicatesEnabled.checked,
+    apiKey: elements.apiKey.value,
+    organizationMode: elements.organizationMode.value
   };
 
   await chrome.storage.sync.set(settings);
+}
+
+async function organizeWorkspaces() {
+  const apiKey = elements.apiKey.value;
+  if (!apiKey) {
+    elements.organizeStatus.textContent = 'Enter API key first';
+    elements.organizeStatus.className = 'organize-status error';
+    return;
+  }
+
+  elements.organizeBtn.disabled = true;
+  elements.organizeStatus.textContent = 'Organizing...';
+  elements.organizeStatus.className = 'organize-status';
+
+  try {
+    const response = await chrome.runtime.sendMessage({ action: 'organizeWorkspaces' });
+
+    if (response.error) {
+      elements.organizeStatus.textContent = response.error;
+      elements.organizeStatus.className = 'organize-status error';
+    } else if (response.count === 0) {
+      elements.organizeStatus.textContent = 'No workspaces found';
+      elements.organizeStatus.className = 'organize-status';
+    } else {
+      elements.organizeStatus.textContent = `Created ${response.count} workspace(s)`;
+      elements.organizeStatus.className = 'organize-status success';
+    }
+  } catch (e) {
+    elements.organizeStatus.textContent = e.message;
+    elements.organizeStatus.className = 'organize-status error';
+  }
+
+  elements.organizeBtn.disabled = false;
+  loadLogs();
 }
 
 async function loadLogs() {

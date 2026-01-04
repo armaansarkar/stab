@@ -1,6 +1,11 @@
 // Tab activity tracking (persisted to survive service worker restarts)
 let tabActivity = new Map();
 
+// Workspace tracking
+let previousTabId = null;
+let previousTabStart = null;
+const MIN_DWELL_MS = 3000; // 3 seconds minimum to count as meaningful
+
 // Load tab activity from storage
 async function loadTabActivity() {
   const { tabActivityData = {} } = await chrome.storage.local.get('tabActivityData');
@@ -20,7 +25,9 @@ const DEFAULT_SETTINGS = {
   idleUnit: 'minutes',
   memoryEnabled: false,
   memoryThresholdMB: 500,
-  duplicatesEnabled: true
+  duplicatesEnabled: true,
+  apiKey: '',
+  organizationMode: 'groups'
 };
 
 let settings = { ...DEFAULT_SETTINGS };
@@ -88,10 +95,29 @@ function setupAlarm() {
   chrome.alarms.create('checkTabs', { periodInMinutes: 1 });
 }
 
-// Track tab activation
+// Track tab activation with dwell time
 chrome.tabs.onActivated.addListener(async ({ tabId }) => {
-  tabActivity.set(tabId, Date.now());
+  const now = Date.now();
+
+  // Update basic activity tracking
+  tabActivity.set(tabId, now);
   await saveTabActivity();
+
+  // Calculate dwell time in previous tab
+  if (previousTabId && previousTabStart) {
+    const dwellMs = now - previousTabStart;
+
+    // Update engagement for previous tab
+    await updateEngagement(previousTabId, dwellMs);
+
+    // Only record relationship if meaningful dwell time
+    if (dwellMs >= MIN_DWELL_MS && previousTabId !== tabId) {
+      await recordRelationship(previousTabId, tabId, dwellMs);
+    }
+  }
+
+  previousTabId = tabId;
+  previousTabStart = now;
 });
 
 // Track tab updates (for new tabs)
@@ -258,3 +284,205 @@ async function checkDuplicateTabs() {
     }
   }
 }
+
+// ============================================
+// Workspace Organization
+// ============================================
+
+// Update engagement tracking for a tab
+async function updateEngagement(tabId, dwellMs) {
+  const { tabEngagement = {} } = await chrome.storage.local.get('tabEngagement');
+  const key = String(tabId);
+  if (!tabEngagement[key]) {
+    tabEngagement[key] = { totalSeconds: 0, visits: 0 };
+  }
+  tabEngagement[key].totalSeconds += dwellMs / 1000;
+  tabEngagement[key].visits += 1;
+  await chrome.storage.local.set({ tabEngagement });
+}
+
+// Record relationship between two tabs
+async function recordRelationship(fromId, toId, dwellMs) {
+  const { tabRelationships = {} } = await chrome.storage.local.get('tabRelationships');
+  const key = [fromId, toId].sort().join('-');
+  if (!tabRelationships[key]) {
+    tabRelationships[key] = { count: 0, totalDwellSeconds: 0 };
+  }
+  tabRelationships[key].count += 1;
+  tabRelationships[key].totalDwellSeconds += dwellMs / 1000;
+  await chrome.storage.local.set({ tabRelationships });
+}
+
+// Detect workspaces using LLM
+async function detectWorkspaces(apiKey) {
+  const tabs = await chrome.tabs.query({});
+  const { tabRelationships = {}, tabEngagement = {} } =
+    await chrome.storage.local.get(['tabRelationships', 'tabEngagement']);
+
+  // Filter to only tabs that still exist
+  const existingTabIds = new Set(tabs.map(t => t.id));
+
+  // Build data for LLM with engagement info
+  const tabData = tabs
+    .filter(t => t.url && !t.url.startsWith('chrome://'))
+    .map(t => {
+      const engagement = tabEngagement[t.id] || { totalSeconds: 0, visits: 0 };
+      return {
+        id: t.id,
+        title: t.title || 'Untitled',
+        domain: new URL(t.url).hostname,
+        timeSpentMin: Math.round(engagement.totalSeconds / 60),
+        visits: engagement.visits
+      };
+    });
+
+  // Get significant relationships (weighted by dwell time)
+  const relationships = Object.entries(tabRelationships)
+    .map(([key, data]) => {
+      const [id1, id2] = key.split('-').map(Number);
+      // Only include relationships where both tabs still exist
+      if (!existingTabIds.has(id1) || !existingTabIds.has(id2)) return null;
+      return {
+        pair: [id1, id2],
+        count: data.count,
+        avgDwellSec: Math.round(data.totalDwellSeconds / data.count)
+      };
+    })
+    .filter(r => r && r.count >= 2)
+    .sort((a, b) => (b.count * b.avgDwellSec) - (a.count * a.avgDwellSec))
+    .slice(0, 50); // Limit to top 50 relationships
+
+  if (tabData.length < 2) {
+    return { workspaces: [] };
+  }
+
+  // Build prompt
+  const tabLines = tabData.map(t =>
+    `[id:${t.id}] "${t.title}" | ${t.domain} | ${t.timeSpentMin} min, ${t.visits} visits`
+  ).join('\n');
+
+  const relLines = relationships.map(r =>
+    `Tabs ${r.pair[0]} ↔ ${r.pair[1]}: ${r.count} transitions, avg ${r.avgDwellSec}s dwell`
+  ).join('\n');
+
+  const prompt = `Analyze browser tabs to detect workspaces - tabs the user actively uses together.
+
+TAB DATA (with engagement):
+${tabLines}
+
+RELATIONSHIP DATA (dwell-weighted, only meaningful transitions):
+${relLines || 'No significant relationships recorded yet.'}
+
+Identify workspaces. Consider:
+- Relationship strength (transitions × dwell time)
+- Time spent in tabs (high = important, low = waypoint)
+- Semantic similarity (related content)
+
+Return JSON only: { "workspaces": [{ "name": "Short Name", "tabIds": [123, 456] }] }
+
+Rules:
+- Workspace = tabs used together for one task
+- Ignore low-engagement tabs (brief visits, just passing through)
+- Short names (2-3 words)
+- Minimum 2 tabs per workspace
+- Tabs without clear workspace can be omitted`;
+
+  // Call Anthropic API
+  try {
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 1024,
+        messages: [{ role: 'user', content: prompt }]
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`API error: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const content = result.content[0].text;
+
+    // Parse JSON from response
+    const jsonMatch = content.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return { workspaces: [] };
+  } catch (e) {
+    console.error('Workspace detection failed:', e);
+    throw e;
+  }
+}
+
+// Apply workspaces (create groups or windows)
+async function applyWorkspaces(workspaces, mode) {
+  const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
+  let colorIndex = 0;
+
+  for (const ws of workspaces) {
+    if (!ws.tabIds || ws.tabIds.length < 2) continue;
+
+    try {
+      if (mode === 'windows') {
+        // Move to new window
+        const newWindow = await chrome.windows.create({ tabId: ws.tabIds[0] });
+        if (ws.tabIds.length > 1) {
+          await chrome.tabs.move(ws.tabIds.slice(1), {
+            windowId: newWindow.id,
+            index: -1
+          });
+        }
+      } else {
+        // Create tab group (default)
+        const groupId = await chrome.tabs.group({ tabIds: ws.tabIds });
+        await chrome.tabGroups.update(groupId, {
+          title: ws.name,
+          color: colors[colorIndex % colors.length]
+        });
+        colorIndex++;
+      }
+    } catch (e) {
+      console.error(`Failed to create workspace "${ws.name}":`, e);
+    }
+  }
+}
+
+// Handle messages from popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message.action === 'organizeWorkspaces') {
+    (async () => {
+      try {
+        await loadSettings();
+        const apiKey = settings.apiKey;
+        if (!apiKey) {
+          sendResponse({ error: 'No API key configured' });
+          return;
+        }
+
+        await log('Detecting workspaces...');
+        const result = await detectWorkspaces(apiKey);
+
+        if (result.workspaces && result.workspaces.length > 0) {
+          await applyWorkspaces(result.workspaces, settings.organizationMode || 'groups');
+          await log(`Created ${result.workspaces.length} workspace(s)`);
+          sendResponse({ success: true, count: result.workspaces.length });
+        } else {
+          await log('No workspaces detected');
+          sendResponse({ success: true, count: 0 });
+        }
+      } catch (e) {
+        await log(`Error: ${e.message}`);
+        sendResponse({ error: e.message });
+      }
+    })();
+    return true; // Keep channel open for async response
+  }
+});

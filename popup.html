@@ -51,6 +51,26 @@
       </div>
     </div>
 
+    <div class="setting workspace-section">
+      <div class="setting-header">
+        <span class="setting-label">Smart Workspaces</span>
+      </div>
+      <div class="setting-detail">
+        <span>Organize into</span>
+        <select id="organizationMode">
+          <option value="groups">tab groups</option>
+          <option value="windows">windows</option>
+        </select>
+      </div>
+      <div class="setting-detail">
+        <input type="password" id="apiKey" placeholder="Anthropic API key">
+      </div>
+      <div class="setting-detail">
+        <button id="organizeBtn" class="organize-btn">Organize Tabs</button>
+        <span id="organizeStatus" class="organize-status"></span>
+      </div>
+    </div>
+
     <div class="footer">
       <span class="note">Pinned and active tabs are protected. Suspended tabs aren't tracked.</span>
     </div>
