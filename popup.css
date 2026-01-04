@@ -322,9 +322,11 @@ input:checked + .slider:before {
   margin-left: 0;
 }
 
-.workspace-section .setting-detail input[type="password"] {
+.workspace-section .setting-detail input[type="text"] {
   width: 100%;
   text-align: left;
+  font-family: monospace;
+  font-size: 11px;
 }
 
 .organize-btn {
