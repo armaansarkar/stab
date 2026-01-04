@@ -417,10 +417,13 @@ Rules:
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       const parsed = JSON.parse(jsonMatch[0]);
-      console.log('LLM returned workspaces:', JSON.stringify(parsed, null, 2));
+      await log(`LLM found ${parsed.workspaces?.length || 0} workspace(s)`);
+      for (const ws of (parsed.workspaces || [])) {
+        await log(`  ${ws.name}: tabs ${ws.tabIds?.join(', ')}`);
+      }
       return parsed;
     }
-    console.log('No JSON found in LLM response');
+    await log('No workspaces in LLM response');
     return { workspaces: [] };
   } catch (e) {
     console.error('Workspace detection failed:', e);
@@ -445,10 +448,10 @@ async function applyWorkspaces(workspaces, mode) {
 
     // Filter to only valid tab IDs
     const validIds = ws.tabIds.filter(id => validTabIds.has(id));
-    console.log(`Workspace "${ws.name}": requested ${ws.tabIds.length} tabs, ${validIds.length} valid`);
+    await log(`${ws.name}: ${validIds.length}/${ws.tabIds.length} tabs valid`);
 
     if (validIds.length < 2) {
-      console.log(`Skipping workspace "${ws.name}": not enough valid tabs`);
+      await log(`Skipped ${ws.name}: need 2+ tabs`);
       continue;
     }
 
