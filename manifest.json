@@ -6,10 +6,14 @@
   "permissions": [
     "tabs",
     "storage",
-    "alarms"
+    "alarms",
+    "tabGroups"
   ],
   "optional_permissions": [
     "processes"
+  ],
+  "host_permissions": [
+    "https://api.anthropic.com/*"
   ],
   "background": {
     "service_worker": "background.js"
