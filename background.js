@@ -416,8 +416,11 @@ Rules:
     // Parse JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
-      return JSON.parse(jsonMatch[0]);
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log('LLM returned workspaces:', JSON.stringify(parsed, null, 2));
+      return parsed;
     }
+    console.log('No JSON found in LLM response');
     return { workspaces: [] };
   } catch (e) {
     console.error('Workspace detection failed:', e);
@@ -430,30 +433,50 @@ async function applyWorkspaces(workspaces, mode) {
   const colors = ['blue', 'red', 'yellow', 'green', 'pink', 'purple', 'cyan', 'orange'];
   let colorIndex = 0;
 
+  // Get current tabs to validate IDs
+  const currentTabs = await chrome.tabs.query({});
+  const validTabIds = new Set(currentTabs.map(t => t.id));
+
   for (const ws of workspaces) {
-    if (!ws.tabIds || ws.tabIds.length < 2) continue;
+    if (!ws.tabIds || ws.tabIds.length < 2) {
+      console.log(`Skipping workspace "${ws.name}": not enough tabs`);
+      continue;
+    }
+
+    // Filter to only valid tab IDs
+    const validIds = ws.tabIds.filter(id => validTabIds.has(id));
+    console.log(`Workspace "${ws.name}": requested ${ws.tabIds.length} tabs, ${validIds.length} valid`);
+
+    if (validIds.length < 2) {
+      console.log(`Skipping workspace "${ws.name}": not enough valid tabs`);
+      continue;
+    }
 
     try {
       if (mode === 'windows') {
         // Move to new window
-        const newWindow = await chrome.windows.create({ tabId: ws.tabIds[0] });
-        if (ws.tabIds.length > 1) {
-          await chrome.tabs.move(ws.tabIds.slice(1), {
+        const newWindow = await chrome.windows.create({ tabId: validIds[0] });
+        if (validIds.length > 1) {
+          await chrome.tabs.move(validIds.slice(1), {
             windowId: newWindow.id,
             index: -1
           });
         }
+        await log(`Created window: ${ws.name}`);
       } else {
         // Create tab group (default)
-        const groupId = await chrome.tabs.group({ tabIds: ws.tabIds });
+        console.log(`Creating group with tabs:`, validIds);
+        const groupId = await chrome.tabs.group({ tabIds: validIds });
         await chrome.tabGroups.update(groupId, {
           title: ws.name,
           color: colors[colorIndex % colors.length]
         });
+        await log(`Created group: ${ws.name}`);
         colorIndex++;
       }
     } catch (e) {
       console.error(`Failed to create workspace "${ws.name}":`, e);
+      await log(`Failed: ${ws.name} - ${e.message}`);
     }
   }
 }
