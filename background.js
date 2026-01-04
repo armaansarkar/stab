@@ -459,7 +459,7 @@ async function applyWorkspaces(workspaces, mode) {
       if (mode === 'windows') {
         // Move to new window
         await log(`Moving tab ${validIds[0]} to new window...`);
-        const newWindow = await chrome.windows.create({ tabId: validIds[0] });
+        const newWindow = await chrome.windows.create({ tabId: validIds[0], focused: true });
         await log(`Window ${newWindow?.id} created, focused: ${newWindow?.focused}`);
         if (validIds.length > 1) {
           await log(`Moving tabs ${validIds.slice(1).join(', ')} to window ${newWindow.id}...`);
