@@ -470,6 +470,15 @@ async function applyWorkspaces(workspaces, mode) {
           await log(`Moved ${Array.isArray(moved) ? moved.length : 1} tab(s)`);
         }
         await log(`Done: ${ws.name}`);
+      } else if (mode === 'adjacent') {
+        // Move tabs to be adjacent in current window
+        const firstTab = await chrome.tabs.get(validIds[0]);
+        const targetIndex = firstTab.index;
+        await log(`Moving ${validIds.length} tabs adjacent at index ${targetIndex}...`);
+        for (let i = 1; i < validIds.length; i++) {
+          await chrome.tabs.move(validIds[i], { index: targetIndex + i });
+        }
+        await log(`Done: ${ws.name} (${validIds.length} tabs together)`);
       } else {
         // Create tab group (default)
         console.log(`Creating group with tabs:`, validIds);
