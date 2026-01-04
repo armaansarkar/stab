@@ -143,6 +143,7 @@ input:checked + .slider:before {
 
 .collapsible-section summary::before {
   content: '▶';
+  display: inline-block;
   font-size: 10px;
   margin-right: 6px;
   transition: transform 0.2s;
